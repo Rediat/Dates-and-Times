@@ -13,10 +13,13 @@ export default {
                     700: '#2c2c2c',
                 },
                 primary: {
-                    500: '#4ade80', // Approximate green from screenshot
+                    500: '#4ade80',
                     600: '#22c55e',
                 }
             },
+            fontFamily: {
+                mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
+            }
         },
     },
     plugins: [],
