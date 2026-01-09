@@ -22,7 +22,7 @@ function App() {
   const [activeTab, setActiveTab] = useState<'converter' | 'calculator'>('converter');
 
   return (
-    <div className="min-h-screen bg-dark-900 text-white px-4 py-6 md:py-10 flex flex-col items-center">
+    <div className="min-h-[100dvh] bg-dark-900 text-white px-4 pt-14 pb-10 flex flex-col items-center">
       <div className="w-full max-w-md">
         <header className="flex justify-between items-start mb-6">
           <div>
