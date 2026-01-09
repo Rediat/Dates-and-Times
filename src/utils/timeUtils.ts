@@ -60,20 +60,71 @@ export const abbreviations = [
     { name: 'BRT - Brasilia Time', value: 'America/Sao_Paulo' },
 ];
 
-// Helper to get all available time zones from Luxon/Intl
-export const getAllTimeZones = () => {
-    const ianaZones = Intl.supportedValuesOf('timeZone').map(zone => ({
-        name: zone.replace(/_/g, ' '),
-        value: zone
-    }));
+import { getCountryName } from './zoneToCountry';
 
-    // Combine popular, abbreviations and ianaZones, then deduplicate by value
-    const combined = [...popularTimeZones, ...abbreviations, ...ianaZones];
-    const seen = new Set();
-    return combined.filter(z => {
-        if (seen.has(z.value)) return false;
-        seen.add(z.value);
-        return true;
+export interface TimeZoneOption {
+    value: string;
+    label: string;
+    country: string;
+    offset: string;
+    offsetMinutes: number; // for sorting
+}
+
+// Helper to get all available time zones from Luxon/Intl
+export const getAllTimeZones = (): TimeZoneOption[] => {
+    const supportedZones = Intl.supportedValuesOf('timeZone');
+
+    // Add UTC if not present
+    if (!supportedZones.includes('UTC')) {
+        supportedZones.push('UTC');
+    }
+
+    const zonesWithData = supportedZones.map(zone => {
+        const dt = DateTime.now().setZone(zone);
+        const offset = dt.toFormat('ZZ');
+        const offsetMinutes = dt.offset;
+        const country = getCountryName(zone);
+
+        // Format: "Country (GMT+XX:XX)" 
+        // Or if user wants specifically "Country Name and thier GMT time zone in bracket"
+        // Let's do: "Country - City (GMT+XX:XX)" for clarity if multiple cities, 
+        // or just "Country (GMT+XX:XX)" if we only care about country.
+        // User asked: "add on the drop down items list their country name and thier GMT time zone in bracket."
+        // Example: "United Kingdom (GMT+01:00)"
+
+        // We might want to include the City if it's significant, but let's stick to the request.
+        // However, many zones map to the same country (e.g. US). 
+        // Distinguishing them is important.
+        // Let's format as: "Country - City (GMT+XX:XX)"
+
+        let label = '';
+        if (zone === 'UTC') {
+            label = 'Universal Time (GMT+00:00)';
+        } else {
+            const city = zone.split('/').pop()?.replace(/_/g, ' ') || zone;
+            // If country name is basically the city or just a continent, handle gracefully
+            if (country === city) {
+                label = `${country} (GMT${offset})`;
+            } else {
+                label = `${country} - ${city} (GMT${offset})`;
+            }
+        }
+
+        return {
+            value: zone,
+            label,
+            country,
+            offset,
+            offsetMinutes
+        };
+    });
+
+    // Sort by offset? Or by Country? 
+    // Usually offset is good for time zones, but country search is requested. 
+    // Let's sort by Country Name then City.
+    return zonesWithData.sort((a, b) => {
+        if (a.country !== b.country) return a.country.localeCompare(b.country);
+        return a.value.localeCompare(b.value);
     });
 };
 

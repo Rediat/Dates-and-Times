@@ -1,7 +1,8 @@
 import React from 'react';
 import { DateTime } from 'luxon';
-import { Trash2, Sun, Moon, ChevronDown } from 'lucide-react';
-import { getDayNightStatus, getAllTimeZones, popularTimeZones } from '../utils/timeUtils';
+import { Trash2, Sun, Moon } from 'lucide-react';
+import { getDayNightStatus, getAllTimeZones } from '../utils/timeUtils';
+import { SearchableSelect } from './SearchableSelect';
 
 interface TimeCardProps {
     id: string;
@@ -150,22 +151,16 @@ export const TimeCard: React.FC<TimeCardProps> = ({
     return (
         <div className="bg-neutral-800/40 rounded-2xl p-4 transition-all duration-300 border border-transparent hover:border-neutral-700 relative group">
             <div className="flex justify-between items-start mb-4">
-                <div className="flex flex-col">
-                    <div className="relative inline-block">
-                        <select
+                <div className="flex flex-col flex-1 min-w-0 mr-4">
+                    <div className="relative z-10">
+                        <SearchableSelect
+                            options={allZones}
                             value={zoneName}
-                            onChange={(e) => onZoneChange(e.target.value)}
-                            className="appearance-none bg-neutral-900/50 text-neutral-300 font-bold py-1 px-3 pr-8 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-500/30 transition-all text-xs"
-                        >
-                            {allZones.map((z) => (
-                                <option key={z.value} value={z.value}>
-                                    {z.name}
-                                </option>
-                            ))}
-                        </select>
-                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-500 w-3 h-3 pointer-events-none" />
+                            onChange={onZoneChange}
+                            className="w-full max-w-[280px]"
+                        />
                     </div>
-                    <span className="text-[9px] uppercase tracking-tighter text-neutral-500 font-bold mt-1 ml-1 self-start">
+                    <span className="text-[9px] uppercase tracking-tighter text-neutral-500 font-bold mt-2 ml-1 self-start">
                         GMT {localDateTime.toFormat('ZZ')} • {status}
                     </span>
                 </div>
@@ -211,19 +206,14 @@ export const TimeCard: React.FC<TimeCardProps> = ({
                 <div className="mt-4 text-center">
                     <span className="text-[10px] font-bold text-neutral-600 tracking-wider uppercase bg-neutral-900/40 px-3 py-1 rounded-full border border-neutral-800">
                         {(() => {
-                            // Try to find a friendly name first
-                            const popular = popularTimeZones.find(p => p.value === zoneName);
-                            if (popular) {
-                                // Extract e.g. "Paris (CEST/CET)" -> "Paris" or keep full? User said "display the time zone selected".
-                                // Ideally just the city or friendly name. Let's keep it full for clarity as per dropdown.
-                                return popular.name;
-                            }
+                            const zone = allZones.find(z => z.value === zoneName);
+                            if (zone) return zone.label;
 
-                            // Fallback to formatted name
+                            // Fallback
                             if (localDateTime.toFormat('z') === localDateTime.zoneName) {
                                 return localDateTime.zoneName.replace(/_/g, ' ');
                             }
-                            return localDateTime.toFormat('ZZZZ'); // long time zone name if available
+                            return localDateTime.toFormat('ZZZZ');
                         })()}
                     </span>
                 </div>
