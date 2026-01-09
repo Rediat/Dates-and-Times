@@ -177,6 +177,13 @@ export const TimeCard: React.FC<TimeCardProps> = ({
 
             <div className="flex flex-col items-center">
                 <div className="relative group w-full flex justify-center">
+                    {/* Overlay Text for 24H mode to ensure strict formatting on mobile */}
+                    {use24Hour && (
+                        <span className="absolute inset-0 flex items-center justify-center text-4xl sm:text-5xl md:text-6xl font-mono font-black text-white pointer-events-none">
+                            {inputValue}
+                        </span>
+                    )}
+
                     <input
                         key={use24Hour ? '24h' : '12h'}
                         ref={inputRef}
@@ -184,7 +191,7 @@ export const TimeCard: React.FC<TimeCardProps> = ({
                         value={inputValue}
                         onChange={handleTimeChange}
                         onKeyDown={handleKeyDown}
-                        className="text-4xl sm:text-5xl md:text-6xl font-mono font-black bg-transparent text-white text-center focus:outline-none focus:text-primary-400 transition-colors cursor-pointer w-full"
+                        className={`text-4xl sm:text-5xl md:text-6xl font-mono font-black bg-transparent text-white text-center focus:outline-none focus:text-primary-400 transition-colors cursor-pointer w-full relative z-10 ${use24Hour ? 'opacity-0' : ''}`}
                         spellCheck={false}
                     />
                     <div className="absolute -top-4 flex items-center justify-center pointer-events-none opacity-30 group-hover:opacity-60 transition-opacity">
