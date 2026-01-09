@@ -17,7 +17,7 @@ function App() {
     setUse24Hour,
     showDate,
     setShowDate,
-  } = useTimeZoneSync(['local', 'UTC']);
+  } = useTimeZoneSync(['UTC', 'Africa/Addis_Ababa']);
 
   const [activeTab, setActiveTab] = useState<'converter' | 'calculator'>('converter');
 
@@ -43,8 +43,8 @@ function App() {
           <button
             onClick={() => setActiveTab('converter')}
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-xs font-bold uppercase tracking-wider rounded-lg transition-all duration-300 ${activeTab === 'converter'
-                ? 'bg-neutral-800 text-primary-500 shadow-lg shadow-black/20 ring-1 ring-white/5'
-                : 'text-neutral-500 hover:text-neutral-300 hover:bg-white/5'
+              ? 'bg-neutral-800 text-primary-500 shadow-lg shadow-black/20 ring-1 ring-white/5'
+              : 'text-neutral-500 hover:text-neutral-300 hover:bg-white/5'
               }`}
           >
             <Globe size={14} /> Converter
@@ -52,8 +52,8 @@ function App() {
           <button
             onClick={() => setActiveTab('calculator')}
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-xs font-bold uppercase tracking-wider rounded-lg transition-all duration-300 ${activeTab === 'calculator'
-                ? 'bg-neutral-800 text-primary-500 shadow-lg shadow-black/20 ring-1 ring-white/5'
-                : 'text-neutral-500 hover:text-neutral-300 hover:bg-white/5'
+              ? 'bg-neutral-800 text-primary-500 shadow-lg shadow-black/20 ring-1 ring-white/5'
+              : 'text-neutral-500 hover:text-neutral-300 hover:bg-white/5'
               }`}
           >
             <Calendar size={14} /> Calculator
