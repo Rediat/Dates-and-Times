@@ -157,7 +157,7 @@ export const TimeCard: React.FC<TimeCardProps> = ({
                             options={allZones}
                             value={zoneName}
                             onChange={onZoneChange}
-                            className="w-full max-w-[280px]"
+                            className="w-full"
                         />
                     </div>
                     <span className="text-[9px] uppercase tracking-tighter text-neutral-500 font-bold mt-2 ml-1 self-start">

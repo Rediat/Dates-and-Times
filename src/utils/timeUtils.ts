@@ -79,34 +79,58 @@ export const getAllTimeZones = (): TimeZoneOption[] => {
         supportedZones.push('UTC');
     }
 
+    // Create a map for manual abbreviation lookup
+    const manualAbbrMap: Record<string, string> = {};
+    abbreviations.forEach(item => {
+        // e.g. "EAT - Eastern Africa Time" -> "EAT"
+        const abbr = item.name.split(' - ')[0];
+        manualAbbrMap[item.value] = abbr;
+    });
+
     const zonesWithData = supportedZones.map(zone => {
         const dt = DateTime.now().setZone(zone);
         const offset = dt.toFormat('ZZ');
         const offsetMinutes = dt.offset;
         const country = getCountryName(zone);
 
-        // Format: "Country (GMT+XX:XX)" 
-        // Or if user wants specifically "Country Name and thier GMT time zone in bracket"
-        // Let's do: "Country - City (GMT+XX:XX)" for clarity if multiple cities, 
-        // or just "Country (GMT+XX:XX)" if we only care about country.
-        // User asked: "add on the drop down items list their country name and thier GMT time zone in bracket."
-        // Example: "United Kingdom (GMT+01:00)"
+        // Get abbreviation
+        // Try Luxon first (browser dependent)
+        let abbr = dt.toFormat('z');
 
-        // We might want to include the City if it's significant, but let's stick to the request.
-        // However, many zones map to the same country (e.g. US). 
-        // Distinguishing them is important.
-        // Let's format as: "Country - City (GMT+XX:XX)"
+        // If Luxon returns the zone name (e.g. "Africa/Nairobi") or similar useless string,
+        // or just the offset (GMT+3), try our manual map.
+        // Also check if it matches the start of our manual map value
+        if (abbr === zone || abbr.startsWith('GMT') || abbr === offset) {
+            if (manualAbbrMap[zone]) {
+                abbr = manualAbbrMap[zone];
+            }
+        }
+
+        // Cleanup: If abbreviation is still just the offset or full zone name, we might want to hide it
+        // BUT user specifically asked for "WET, CST, EAT". 
+        // If we can't find a short alpha code, maybe it's better to show nothing than "GMT+03:00" twice.
+        const isAbbrUseful = /^[A-Z]{3,5}$/.test(abbr); // simple check for 3-5 char codes like EST, WET, CEST
 
         let label = '';
         if (zone === 'UTC') {
-            label = 'Universal Time (GMT+00:00)';
+            label = 'Universal Time (UTC, GMT+00:00)';
         } else {
             const city = zone.split('/').pop()?.replace(/_/g, ' ') || zone;
-            // If country name is basically the city or just a continent, handle gracefully
+
+            // Format: "Country - City (Abbr, GMT+XX:XX)"
+            // If Abbr is not useful, "Country - City (GMT+XX:XX)"
+
+            let locationPart = '';
             if (country === city) {
-                label = `${country} (GMT${offset})`;
+                locationPart = country;
             } else {
-                label = `${country} - ${city} (GMT${offset})`;
+                locationPart = `${country} - ${city}`;
+            }
+
+            if (isAbbrUseful) {
+                label = `${locationPart} (${abbr}, GMT${offset})`;
+            } else {
+                label = `${locationPart} (GMT${offset})`;
             }
         }
 
@@ -119,9 +143,7 @@ export const getAllTimeZones = (): TimeZoneOption[] => {
         };
     });
 
-    // Sort by offset? Or by Country? 
-    // Usually offset is good for time zones, but country search is requested. 
-    // Let's sort by Country Name then City.
+    // Sort by Country Name then City
     return zonesWithData.sort((a, b) => {
         if (a.country !== b.country) return a.country.localeCompare(b.country);
         return a.value.localeCompare(b.value);
