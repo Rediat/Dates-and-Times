@@ -1,6 +1,6 @@
 import React from 'react';
 import { DateTime } from 'luxon';
-import { Trash2, Sun, Moon } from 'lucide-react';
+import { Trash2, Sun, Moon, ChevronUp, ChevronDown } from 'lucide-react';
 import { getDayNightStatus, getAllTimeZones } from '../utils/timeUtils';
 import { SearchableSelect } from './SearchableSelect';
 
@@ -19,7 +19,7 @@ interface TimeCardProps {
 export const TimeCard: React.FC<TimeCardProps> = ({
     zoneName,
     baseTime,
-    use24Hour, // Used by the parent to control global time format
+    use24Hour,
     showDate,
     onTimeChange,
     onZoneChange,
@@ -30,62 +30,149 @@ export const TimeCard: React.FC<TimeCardProps> = ({
     const status = getDayNightStatus(localDateTime);
     const allZones = getAllTimeZones();
 
-    // Local state for the input value to allow for seamless typing
+    // Local state for the 24H input value
     const [inputValue, setInputValue] = React.useState('');
 
-    // Sync local input with global time when global time changes (and we're not focused? No, aggressive sync might interrupt.
-    // Better: Sync when formatting changes or baseTime changes significantly?)
-    // Actually, to avoid fighting the user, we can rely on standard React controlled input pattern
-    // but allow intermediate invalid states.
-    // However, since baseTime updates every minute or from other cards, we MUST sync.
+    // Local state for 12H split inputs
+    const [hour12, setHour12] = React.useState('12');
+    const [minute12, setMinute12] = React.useState('00');
+    const [period, setPeriod] = React.useState<'AM' | 'PM'>('AM');
+
+    // Sync local input with global time
     React.useEffect(() => {
-        setInputValue(use24Hour ? localDateTime.toFormat('HH:mm') : localDateTime.toFormat('hh:mm a'));
+        if (use24Hour) {
+            setInputValue(localDateTime.toFormat('HH:mm'));
+        } else {
+            setHour12(localDateTime.toFormat('hh'));
+            setMinute12(localDateTime.toFormat('mm'));
+            setPeriod(localDateTime.hour >= 12 ? 'PM' : 'AM');
+        }
     }, [baseTime.toMillis(), zoneName, use24Hour]);
 
+    // Handle 24H time change
     const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const val = e.target.value;
-        setInputValue(val); // Always update local state immediately so typing flows
+        setInputValue(val);
 
-        let newTime: DateTime | null = null;
-        let isValidUpdate = false;
-
-        if (use24Hour) {
-            // Browser native time input gives HH:mm
-            const [hours, minutes] = val.split(':').map(Number);
-            if (!isNaN(hours) && !isNaN(minutes)) {
-                newTime = localDateTime.set({ hour: hours, minute: minutes });
-                isValidUpdate = true;
-            }
-        } else {
-            // Text input: try parsing "hh:mm a" or just "hh:mm" (assume AM/PM if missing?)
-            // Let's use Luxon's loose parsing or specific formats
-            let dt = DateTime.fromFormat(val, 'hh:mm a');
-            if (!dt.isValid) dt = DateTime.fromFormat(val, 'hh:mm a'); // retry exact? no
-            if (!dt.isValid) dt = DateTime.fromFormat(val, 'h:mm a');
-            // Support partial typing for real-time feel if it's a valid time
-            if (dt.isValid) {
-                newTime = localDateTime.set({ hour: dt.hour, minute: dt.minute });
-                isValidUpdate = true;
+        const [hours, minutes] = val.split(':').map(Number);
+        if (!isNaN(hours) && !isNaN(minutes)) {
+            const newTime = localDateTime.set({ hour: hours, minute: minutes });
+            if (newTime.isValid) {
+                onTimeChange(newTime);
             }
         }
+    };
 
-        if (isValidUpdate && newTime && newTime.isValid) {
+    // Handle 12H split input changes
+    const handleHourChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        let val = e.target.value.replace(/\D/g, '');
+        if (val.length > 2) val = val.slice(-2);
+
+        let numVal = parseInt(val, 10);
+        if (isNaN(numVal)) {
+            setHour12(val);
+            return;
+        }
+
+        // Clamp to 1-12
+        if (numVal > 12) numVal = 12;
+        if (numVal < 1 && val.length === 2) numVal = 1;
+
+        const displayVal = val.length === 2 ? numVal.toString().padStart(2, '0') : val;
+        setHour12(displayVal);
+
+        if (val.length === 2 || numVal >= 2) {
+            updateTime12(numVal, parseInt(minute12, 10), period);
+        }
+    };
+
+    const handleMinuteChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        let val = e.target.value.replace(/\D/g, '');
+        if (val.length > 2) val = val.slice(-2);
+
+        let numVal = parseInt(val, 10);
+        if (isNaN(numVal)) {
+            setMinute12(val);
+            return;
+        }
+
+        // Clamp to 0-59
+        if (numVal > 59) numVal = 59;
+
+        const displayVal = val.length === 2 ? numVal.toString().padStart(2, '0') : val;
+        setMinute12(displayVal);
+
+        if (val.length === 2 || numVal >= 6) {
+            updateTime12(parseInt(hour12, 10), numVal, period);
+        }
+    };
+
+    const handlePeriodToggle = () => {
+        const newPeriod = period === 'AM' ? 'PM' : 'AM';
+        setPeriod(newPeriod);
+        updateTime12(parseInt(hour12, 10), parseInt(minute12, 10), newPeriod);
+    };
+
+    const updateTime12 = (h: number, m: number, p: 'AM' | 'PM') => {
+        if (isNaN(h) || isNaN(m) || h < 1 || h > 12 || m < 0 || m > 59) return;
+
+        // Convert 12H to 24H
+        let hour24 = h;
+        if (p === 'AM') {
+            hour24 = h === 12 ? 0 : h;
+        } else {
+            hour24 = h === 12 ? 12 : h + 12;
+        }
+
+        const newTime = localDateTime.set({ hour: hour24, minute: m });
+        if (newTime.isValid) {
             onTimeChange(newTime);
         }
+    };
+
+    // Increment/decrement handlers for 12H mode
+    const incrementHour = () => {
+        let h = parseInt(hour12, 10);
+        if (isNaN(h)) h = 12;
+        h = h >= 12 ? 1 : h + 1;
+        setHour12(h.toString().padStart(2, '0'));
+        updateTime12(h, parseInt(minute12, 10), period);
+    };
+
+    const decrementHour = () => {
+        let h = parseInt(hour12, 10);
+        if (isNaN(h)) h = 12;
+        h = h <= 1 ? 12 : h - 1;
+        setHour12(h.toString().padStart(2, '0'));
+        updateTime12(h, parseInt(minute12, 10), period);
+    };
+
+    const incrementMinute = () => {
+        let m = parseInt(minute12, 10);
+        if (isNaN(m)) m = 0;
+        m = m >= 59 ? 0 : m + 1;
+        setMinute12(m.toString().padStart(2, '0'));
+        updateTime12(parseInt(hour12, 10), m, period);
+    };
+
+    const decrementMinute = () => {
+        let m = parseInt(minute12, 10);
+        if (isNaN(m)) m = 0;
+        m = m <= 0 ? 59 : m - 1;
+        setMinute12(m.toString().padStart(2, '0'));
+        updateTime12(parseInt(hour12, 10), m, period);
     };
 
     const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const value = e.target.value;
         if (!value) return;
 
-        // Standard date inputs provide YYYY-MM-DD
         const dateMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
         if (dateMatch) {
             const [_, year, month, day] = dateMatch.map(Number);
             const newTime = localDateTime.set({ year, month, day });
             onTimeChange(newTime);
         } else {
-            // Fallback for non-standard formats if any
             const dt = DateTime.fromISO(value);
             if (dt.isValid) {
                 const newTime = localDateTime.set({ year: dt.year, month: dt.month, day: dt.day });
@@ -94,58 +181,21 @@ export const TimeCard: React.FC<TimeCardProps> = ({
         }
     };
 
-    // Track cursor position to restore it after updates
-    const inputRef = React.useRef<HTMLInputElement>(null);
-    const cursorRef = React.useRef<number | null>(null);
+    // Handle blur to format inputs properly
+    const handleHourBlur = () => {
+        let h = parseInt(hour12, 10);
+        if (isNaN(h) || h < 1) h = 12;
+        if (h > 12) h = 12;
+        setHour12(h.toString().padStart(2, '0'));
+        updateTime12(h, parseInt(minute12, 10), period);
+    };
 
-    React.useEffect(() => {
-        if (cursorRef.current !== null && inputRef.current) {
-            inputRef.current.setSelectionRange(cursorRef.current, cursorRef.current);
-            cursorRef.current = null;
-        }
-    }, [inputValue]);
-
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-        if (use24Hour) return; // Native input handles this for 24H
-
-        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-            e.preventDefault();
-            const input = e.currentTarget;
-            const cursor = input.selectionStart || 0;
-            const val = inputValue;
-
-            // Expected format: "hh:mm a" (e.g., "04:30 PM")
-            let dt = DateTime.fromFormat(val, 'hh:mm a');
-            if (!dt.isValid) return;
-
-            const step = e.key === 'ArrowUp' ? 1 : -1;
-
-            // Heuristic for cursor position:
-            // 0-2: Hour
-            // 3-5: Minute
-            // 6+: AM/PM
-            let newDt = dt;
-            if (cursor <= 2) {
-                newDt = dt.plus({ hours: step });
-                cursorRef.current = cursor <= 2 ? cursor : 0; // Keep cursor in hour
-            } else if (cursor >= 3 && cursor <= 5) {
-                newDt = dt.plus({ minutes: step });
-                cursorRef.current = cursor; // Keep cursor
-            } else {
-                // AM/PM toggle - adding 12 hours works
-                newDt = dt.plus({ hours: 12 });
-                cursorRef.current = cursor;
-            }
-
-            // Update parent
-            const newTime = localDateTime.set({
-                hour: newDt.hour,
-                minute: newDt.minute
-            });
-            onTimeChange(newTime);
-            // Also update local state immediately to avoid flickers and allow cursor restore effectiveness
-            setInputValue(newDt.toFormat('hh:mm a'));
-        }
+    const handleMinuteBlur = () => {
+        let m = parseInt(minute12, 10);
+        if (isNaN(m) || m < 0) m = 0;
+        if (m > 59) m = 59;
+        setMinute12(m.toString().padStart(2, '0'));
+        updateTime12(parseInt(hour12, 10), m, period);
     };
 
     return (
@@ -176,27 +226,98 @@ export const TimeCard: React.FC<TimeCardProps> = ({
             </div>
 
             <div className="flex flex-col items-center">
-                <div className="relative group w-full flex justify-center">
-                    {/* Overlay Text for 24H mode to ensure strict formatting on mobile */}
-                    {use24Hour && (
-                        <span className="absolute inset-0 flex items-center justify-center text-4xl sm:text-5xl md:text-6xl font-mono font-black text-white pointer-events-none">
-                            {inputValue}
-                        </span>
-                    )}
-
-                    <input
-                        key={use24Hour ? '24h' : '12h'}
-                        ref={inputRef}
-                        type={use24Hour ? "time" : "text"}
-                        value={inputValue}
-                        onChange={handleTimeChange}
-                        onKeyDown={handleKeyDown}
-                        className={`text-4xl sm:text-5xl md:text-6xl font-mono font-black bg-transparent text-white text-center focus:outline-none focus:text-primary-400 transition-colors cursor-pointer w-full relative z-10 ${use24Hour ? 'opacity-0' : ''}`}
-                        spellCheck={false}
-                    />
+                <div className="relative w-full flex justify-center">
                     <div className="absolute -top-4 flex items-center justify-center pointer-events-none opacity-30 group-hover:opacity-60 transition-opacity">
                         {status === 'day' ? <Sun className="text-primary-500" size={20} /> : <Moon className="text-primary-500" size={20} />}
                     </div>
+
+                    {use24Hour ? (
+                        /* 24H Mode - Native time input with overlay */
+                        <div className="relative w-full flex justify-center">
+                            <span className="absolute inset-0 flex items-center justify-center text-4xl sm:text-5xl md:text-6xl font-mono font-black text-white pointer-events-none">
+                                {inputValue}
+                            </span>
+                            <input
+                                type="time"
+                                value={inputValue}
+                                onChange={handleTimeChange}
+                                className="text-4xl sm:text-5xl md:text-6xl font-mono font-black bg-transparent text-white text-center focus:outline-none opacity-0 cursor-pointer w-full"
+                            />
+                        </div>
+                    ) : (
+                        /* 12H Mode - Split inputs for Hour, Minute, AM/PM */
+                        <div className="flex items-center gap-1 sm:gap-2">
+                            {/* Hour Input */}
+                            <div className="flex flex-col items-center">
+                                <button
+                                    onClick={incrementHour}
+                                    className="p-1 text-neutral-500 hover:text-primary-400 transition-colors active:scale-90"
+                                    aria-label="Increment hour"
+                                >
+                                    <ChevronUp size={18} />
+                                </button>
+                                <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    value={hour12}
+                                    onChange={handleHourChange}
+                                    onBlur={handleHourBlur}
+                                    className="w-14 sm:w-20 text-3xl sm:text-5xl md:text-6xl font-mono font-black bg-neutral-900/50 text-white text-center rounded-xl py-2 focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:text-primary-400 transition-all border border-neutral-700 hover:border-neutral-600"
+                                    maxLength={2}
+                                />
+                                <button
+                                    onClick={decrementHour}
+                                    className="p-1 text-neutral-500 hover:text-primary-400 transition-colors active:scale-90"
+                                    aria-label="Decrement hour"
+                                >
+                                    <ChevronDown size={18} />
+                                </button>
+                            </div>
+
+                            {/* Colon Separator */}
+                            <span className="text-3xl sm:text-5xl md:text-6xl font-mono font-black text-neutral-500">:</span>
+
+                            {/* Minute Input */}
+                            <div className="flex flex-col items-center">
+                                <button
+                                    onClick={incrementMinute}
+                                    className="p-1 text-neutral-500 hover:text-primary-400 transition-colors active:scale-90"
+                                    aria-label="Increment minute"
+                                >
+                                    <ChevronUp size={18} />
+                                </button>
+                                <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    value={minute12}
+                                    onChange={handleMinuteChange}
+                                    onBlur={handleMinuteBlur}
+                                    className="w-14 sm:w-20 text-3xl sm:text-5xl md:text-6xl font-mono font-black bg-neutral-900/50 text-white text-center rounded-xl py-2 focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:text-primary-400 transition-all border border-neutral-700 hover:border-neutral-600"
+                                    maxLength={2}
+                                />
+                                <button
+                                    onClick={decrementMinute}
+                                    className="p-1 text-neutral-500 hover:text-primary-400 transition-colors active:scale-90"
+                                    aria-label="Decrement minute"
+                                >
+                                    <ChevronDown size={18} />
+                                </button>
+                            </div>
+
+                            {/* AM/PM Toggle */}
+                            <button
+                                onClick={handlePeriodToggle}
+                                className="ml-1 sm:ml-2 flex flex-col items-center justify-center bg-neutral-900/50 border border-neutral-700 hover:border-primary-500/50 rounded-xl px-2 sm:px-3 py-2 transition-all active:scale-95 hover:bg-neutral-800/50"
+                            >
+                                <span className={`text-xs sm:text-sm font-bold transition-colors ${period === 'AM' ? 'text-primary-400' : 'text-neutral-600'}`}>
+                                    AM
+                                </span>
+                                <span className={`text-xs sm:text-sm font-bold transition-colors ${period === 'PM' ? 'text-primary-400' : 'text-neutral-600'}`}>
+                                    PM
+                                </span>
+                            </button>
+                        </div>
+                    )}
                 </div>
 
                 {showDate && (
@@ -208,16 +329,13 @@ export const TimeCard: React.FC<TimeCardProps> = ({
                     />
                 )}
 
-
-
-                {/* Zone Label Display as requested */}
+                {/* Zone Label Display */}
                 <div className="mt-4 text-center">
                     <span className="text-[10px] font-bold text-neutral-600 tracking-wider uppercase bg-neutral-900/40 px-3 py-1 rounded-full border border-neutral-800">
                         {(() => {
                             const zone = allZones.find(z => z.value === zoneName);
                             if (zone) return zone.label;
 
-                            // Fallback
                             if (localDateTime.toFormat('z') === localDateTime.zoneName) {
                                 return localDateTime.zoneName.replace(/_/g, ' ');
                             }
